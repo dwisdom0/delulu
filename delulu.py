@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
     # 28 x 28 pixel images
     input_dim = 28 * 28
-    hidden_dims = [128, 64]
+    hidden_dims = [64]
     # 10 digits (0- 9)
     output_dim = 10
 
