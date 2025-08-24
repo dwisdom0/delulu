@@ -1,14 +1,54 @@
 import torch
+import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms.v2 as transforms
+import plotly.graph_objects as go
 from torchvision import datasets
 from torch.utils.data import DataLoader
+from multiprocessing import Pool, cpu_count
 
 
-class Delulu(nn.Module):
+class ReLU(nn.Module):
+    @staticmethod
+    def name():
+        return "ReLU"
+
+    def forward(self, x):
+        return torch.where(x >= 0, x, 0)
+
+
+class Adonis(nn.Module):
+    @staticmethod
+    def name():
+        return "Adonis"
+
     def forward(self, x):
         return x.abs()
+
+
+class DeluLU(nn.Module):
+    @staticmethod
+    def name():
+        return "DeluLU"
+
+    def forward(self, x):
+        # if x >= 0 -> x
+        # if x < 0  -> 1 - (alpha / (alpha - x))
+        alpha = 0.2
+        return torch.where(x >= 0, x, 1 - (alpha / (alpha - x)))
+
+
+class DeluLUv2(nn.Module):
+    @staticmethod
+    def name():
+        return "DeluLUv2"
+
+    def forward(self, x):
+        # if x >= 0 -> x
+        # if x < 0  -> (alpha / (alpha - x)) - 1
+        alpha = 0.2
+        return torch.where(x >= 0, x, (alpha / (alpha - x)) - 1)
 
 
 class MLP(nn.Module):
@@ -35,28 +75,38 @@ class MLP(nn.Module):
         return self.mlp(x)
 
 
-def train(model: nn.Module, epochs: int, dataloader: DataLoader):
+def train(
+    model: nn.Module,
+    train_dataloader: DataLoader,
+    test_dataloader: DataLoader,
+    epochs: int = 5,
+) -> list[float]:
     device = torch.device("mps" if torch.mps.is_available() else "cpu")
     model = model.to(device)
     loss_func = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=0.001)
+    mean_train_losses = []
+    test_accys = []
     for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
-        for images, labels in dataloader:
+        for images, labels in train_dataloader:
             images, labels = images.to(device), labels.to(device)
 
             ouputs = model(images)
             loss = loss_func(ouputs, labels)
-            epoch_loss += loss
+            epoch_loss += loss.item()
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
         print(
-            f"Epoch [{epoch + 1}/{epochs}], Mean Loss: {epoch_loss / len(train_loader):.4f}"
+            f"Epoch [{epoch + 1}/{epochs}], Mean Loss: {epoch_loss / len(train_dataloader):.4f}"
         )
+        mean_train_losses.append(epoch_loss / len(train_dataloader))
+        test_accys.append(evaluate(model, test_dataloader))
+    return mean_train_losses, test_accys
 
 
 def evaluate(model: nn.Module, dataloader: DataLoader):
@@ -73,7 +123,7 @@ def evaluate(model: nn.Module, dataloader: DataLoader):
             correct += (predicted == labels).sum().item()
             total += labels.size(0)
 
-    print(f"Accuracy: {100 * correct / total:.2f}%")
+    return correct / total
 
 
 if __name__ == "__main__":
@@ -108,26 +158,51 @@ if __name__ == "__main__":
     # 10 digits (0- 9)
     output_dim = 10
 
-    old_and_busted = MLP(
-        input_dim=input_dim,
-        hidden_dims=hidden_dims,
-        output_dim=output_dim,
-        activation_func=nn.ReLU,
+    func_names = []
+    train_args_list = []
+    for act_func in [ReLU, Adonis, DeluLU, DeluLUv2]:
+        try:
+            func_name = act_func.name()
+        except AttributeError:
+            func_name = str(act_func().__class__)
+        func_names.append(func_name)
+        model = MLP(
+            input_dim=input_dim,
+            hidden_dims=hidden_dims,
+            output_dim=output_dim,
+            activation_func=act_func,
+        )
+        train_args_list.append((model, train_loader, test_loader, 10))
+
+    with Pool(cpu_count()) as pool:
+        results = pool.starmap(train, train_args_list)
+
+    train_fig = go.Figure()
+    train_fig.update_layout(
+        yaxis_title="Mean Training Loss",
+        xaxis_title="Epoch",
     )
-    new_hotness = MLP(
-        input_dim=input_dim,
-        hidden_dims=hidden_dims,
-        output_dim=output_dim,
-        activation_func=Delulu,
+    train_fig.update_layout(
+        title_text="Training loss on MNIST for different activation functions"
     )
 
-    print(old_and_busted)
-    print(new_hotness)
+    test_fig = go.Figure()
+    test_fig.update_layout(
+        yaxis_title="Accuracy",
+        xaxis_title="Epoch",
+    )
+    test_fig.update_layout(
+        title_text="Test accuracy on MNIST for different activation functions"
+    )
+    test_fig.update
+    for result, func_name in zip(results, func_names):
+        train_losses, test_accys = result
+        train_fig.add_trace(
+            go.Scatter(x=list(range(len(train_losses))), y=train_losses, name=func_name)
+        )
+        test_fig.add_trace(
+            go.Scatter(x=list(range(len(test_accys))), y=test_accys, name=func_name)
+        )
+    train_fig.show()
+    test_fig.show()
 
-    print("OLD AND BUSTED")
-    train(old_and_busted, 5, train_loader)
-    evaluate(old_and_busted, test_loader)
-
-    print("\nNEW HOTNESS")
-    train(new_hotness, 5, train_loader)
-    evaluate(new_hotness, test_loader)
