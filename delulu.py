@@ -218,7 +218,7 @@ if __name__ == "__main__":
     # TODO: another experiment would be to search through
     # different network sizes to see whether one is more efficient
     input_dim = 7
-    hidden_dims = [4]
+    hidden_dims = [64, 16]
     output_dim = 3
 
     func_names = []
