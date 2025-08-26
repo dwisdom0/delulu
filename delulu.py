@@ -8,6 +8,8 @@ from torchvision import datasets
 from torch.utils.data import DataLoader
 from multiprocessing import Pool, cpu_count
 
+from load_penguins import load_penguins_datasets
+
 
 class ReLU(nn.Module):
     @staticmethod
@@ -90,11 +92,13 @@ def train(
     for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
-        for images, labels in train_dataloader:
-            images, labels = images.to(device), labels.to(device)
+        for data, labels in train_dataloader:
+            data, labels = data.to(device), labels.to(device)
 
-            ouputs = model(images)
-            loss = loss_func(ouputs, labels)
+            outputs = model(data)
+            # labels are 1D batch_size but torch CrossEntropyLoss automatically
+            # interprets them as class indicies
+            loss = loss_func(outputs, labels)
             epoch_loss += loss.item()
 
             optimizer.zero_grad()
@@ -116,9 +120,9 @@ def evaluate(model: nn.Module, dataloader: DataLoader):
     correct = 0
     total = 0
     with torch.no_grad():
-        for images, labels in dataloader:
-            images, labels = images.to(device), labels.to(device)
-            outputs = model(images)
+        for data, labels in dataloader:
+            data, labels = data.to(device), labels.to(device)
+            outputs = model(data)
             _, predicted = torch.max(outputs, 1)
             correct += (predicted == labels).sum().item()
             total += labels.size(0)
@@ -150,7 +154,7 @@ if __name__ == "__main__":
     test_dataset = datasets.MNIST(
         root="./data", train=False, transform=transform, download=True
     )
-    test_loader = DataLoader(test_dataset, batch_size=1000)
+    test_loader = DataLoader(test_dataset, batch_size=1024)
 
     # 28 x 28 pixel images
     input_dim = 28 * 28
@@ -172,7 +176,7 @@ if __name__ == "__main__":
             output_dim=output_dim,
             activation_func=act_func,
         )
-        train_args_list.append((model, train_loader, test_loader, 10))
+        train_args_list.append((model, train_loader, test_loader, 2))
 
     with Pool(cpu_count()) as pool:
         results = pool.starmap(train, train_args_list)
@@ -193,6 +197,65 @@ if __name__ == "__main__":
     )
     test_fig.update_layout(
         title_text="Test accuracy on MNIST for different activation functions"
+    )
+    test_fig.update
+    for result, func_name in zip(results, func_names):
+        train_losses, test_accys = result
+        train_fig.add_trace(
+            go.Scatter(x=list(range(len(train_losses))), y=train_losses, name=func_name)
+        )
+        test_fig.add_trace(
+            go.Scatter(x=list(range(len(test_accys))), y=test_accys, name=func_name)
+        )
+    train_fig.show()
+    test_fig.show()
+
+    # palmer penguins
+    train_penguins, test_penguins = load_penguins_datasets()
+    train_penguins = DataLoader(train_penguins, batch_size=64, shuffle=True)
+    test_penguins = DataLoader(test_penguins, batch_size=1024)
+
+    # TODO: another experiment would be to search through
+    # different network sizes to see whether one is more efficient
+    input_dim = 7
+    hidden_dims = [4]
+    output_dim = 3
+
+    func_names = []
+    train_args_list = []
+    for act_func in [ReLU, Adonis, DeluLU, DeluLUv2]:
+        try:
+            func_name = act_func.name()
+        except AttributeError:
+            func_name = str(act_func().__class__)
+        func_names.append(func_name)
+        model = MLP(
+            input_dim=input_dim,
+            hidden_dims=hidden_dims,
+            output_dim=output_dim,
+            activation_func=act_func,
+        )
+        train_args_list.append((model, train_penguins, test_penguins, 10))
+
+    with Pool(cpu_count()) as pool:
+        results = pool.starmap(train, train_args_list)
+
+    train_fig = go.Figure()
+    train_fig.update_layout(
+        yaxis_title="Mean Training Loss",
+        xaxis_title="Epoch",
+    )
+    train_fig.update_layout(
+        title_text="Training loss on Palmer Penguins for different activation functions"
+    )
+
+    test_fig = go.Figure()
+    test_fig.update_layout(
+        yaxis_title="Accuracy",
+        xaxis_title="Epoch",
+    )
+    test_fig.update_layout(
+        title_text="Test accuracy on Palmer Penguins for different activation functions"
     )
     test_fig.update
     for result, func_name in zip(results, func_names):
