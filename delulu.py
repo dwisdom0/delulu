@@ -38,6 +38,15 @@ class GELU(nn.Module):
         return nn.functional.gelu(x)
 
 
+class SiLU(nn.Module):
+    @staticmethod
+    def name():
+        return "SiLU"
+
+    def forward(self, x):
+        return nn.functional.silu(x)
+
+
 class Adonis(nn.Module):
     @staticmethod
     def name():
@@ -224,7 +233,7 @@ def run_experiment(
 
 
 if __name__ == "__main__":
-    funcs = [ReLU, GELU, Adonis, Spongebob, Spongebobv2, DeluLU, DeluLUv2]
+    funcs = [ReLU, GELU, SiLU, Adonis, Spongebob, Spongebobv2, DeluLU, DeluLUv2]
 
     # palmer penguins
     train_penguins, test_penguins = load_penguins_datasets()
