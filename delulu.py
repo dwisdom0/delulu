@@ -29,6 +29,15 @@ class ReLU(nn.Module):
         return torch.where(x >= 0, x, 0)
 
 
+class GELU(nn.Module):
+    @staticmethod
+    def name():
+        return "GELU"
+
+    def forward(self, x):
+        return nn.functional.gelu(x)
+
+
 class Adonis(nn.Module):
     @staticmethod
     def name():
@@ -215,7 +224,7 @@ def run_experiment(
 
 
 if __name__ == "__main__":
-    funcs = [ReLU, Adonis, Spongebob, Spongebobv2, DeluLU, DeluLUv2]
+    funcs = [ReLU, GELU, Adonis, Spongebob, Spongebobv2, DeluLU, DeluLUv2]
 
     # palmer penguins
     train_penguins, test_penguins = load_penguins_datasets()
