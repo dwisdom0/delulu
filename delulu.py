@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from multiprocessing import Pool, cpu_count
 
 from load_penguins import load_penguins_datasets
+from load_moons import load_moons_datasets
 
 
 @dataclass
@@ -234,6 +235,24 @@ def run_experiment(
 
 if __name__ == "__main__":
     funcs = [ReLU, GELU, SiLU, Adonis, Spongebob, Spongebobv2, DeluLU, DeluLUv2]
+
+    # scikit-learn moons
+    # https://scikit-learn.org/stable/modules/generated/sklearn.datasets.make_moons.html
+    train_moons, test_moons = load_moons_datasets()
+    train_moons = DataLoader(train_moons, batch_size=64, shuffle=True)
+    test_moons = DataLoader(test_moons, batch_size=1024)
+
+    moons_model_config = MLPConfig(
+        input_dim=2, hidden_dims=[64, 16], output_dim=2, epochs=10
+    )
+
+    run_experiment(
+        funcs=funcs,
+        mlp_config=moons_model_config,
+        train_dataloader=train_moons,
+        test_dataloader=test_moons,
+        name="SKLearn Moons",
+    )
 
     # palmer penguins
     train_penguins, test_penguins = load_penguins_datasets()
