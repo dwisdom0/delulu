@@ -19,6 +19,8 @@ class PenguinsDataset(Dataset):
 
 
 def load_penguins_datasets():
+    # data comes from
+    # https://raw.githubusercontent.com/allisonhorst/palmerpenguins/master/inst/extdata/penguins.csv
     df = pd.read_csv("data/palmer_penguins/penguins.csv")
     df = df.dropna()
 
