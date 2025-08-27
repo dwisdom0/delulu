@@ -6,9 +6,20 @@ import torchvision.transforms.v2 as transforms
 import plotly.graph_objects as go
 from torchvision import datasets
 from torch.utils.data import DataLoader
+from dataclasses import dataclass
 from multiprocessing import Pool, cpu_count
 
 from load_penguins import load_penguins_datasets
+
+
+@dataclass
+class MLPConfig:
+    input_dim: int
+    hidden_dims: list[int]
+    output_dim: int
+    epochs: int
+
+
 
 
 class ReLU(nn.Module):
@@ -130,14 +141,76 @@ def evaluate(model: nn.Module, dataloader: DataLoader):
     return correct / total
 
 
+def run_experiment(funcs: list[nn.Module], mlp_config: MLPConfig, train_dataloader: DataLoader, test_dataloader: DataLoader, name: str):
+    print(f'\nRunning {name}\n')
+    train_args_list = []
+    for act_func in funcs:
+        model = MLP(
+          input_dim=mlp_config.input_dim,
+          hidden_dims=mlp_config.hidden_dims,
+          output_dim=mlp_config.output_dim,
+          activation_func=act_func
+        )
+        train_args_list.append((model, train_dataloader, test_dataloader, mlp_config.epochs))
+
+    with Pool(cpu_count()) as pool:
+        results = pool.starmap(train, train_args_list)
+
+    train_fig = go.Figure()
+    train_fig.update_layout(
+        yaxis_title="Mean Training Loss",
+        xaxis_title="Epoch",
+    )
+    train_fig.update_layout(
+        title_text=f"Training loss on {name} for different activation functions"
+    )
+
+    test_fig = go.Figure()
+    test_fig.update_layout(
+        yaxis_title="Test Accuracy",
+        xaxis_title="Epoch",
+    )
+    test_fig.update_layout(
+        title_text=f"Test accuracy on {name} for different activation functions"
+    )
+
+    for result, act_func  in zip(results, funcs):
+        try:
+            func_name = act_func.name()
+        except AttributeError:
+            func_name = str(act_func().__class__)
+        train_losses, test_accys = result
+        train_fig.add_trace(
+            go.Scatter(x=list(range(len(train_losses))), y=train_losses, name=func_name)
+        )
+        test_fig.add_trace(
+            go.Scatter(x=list(range(len(test_accys))), y=test_accys, name=func_name)
+        )
+    train_fig.show()
+    test_fig.show()
+
+
+
+
 if __name__ == "__main__":
-    # LLMs want me to noramlize as well
-    # transforms.Normalize((0.1307,), (0.3081,))  # MNIST mean and std (qwen)
-    # transforms.Normalize((0.5,), (0.5,)) (chatgpt)
+
+    funcs = [ReLU, Adonis, DeluLU, DeluLUv2]
+
+    # palmer penguins
+    train_penguins, test_penguins = load_penguins_datasets()
+    train_penguins = DataLoader(train_penguins, batch_size=64, shuffle=True)
+    test_penguins = DataLoader(test_penguins, batch_size=1024)
+
+    penguins_model_config = MLPConfig(input_dim=7, hidden_dims=[64, 16], output_dim=3, epochs=10)
+
+    run_experiment(funcs=funcs, mlp_config=penguins_model_config, train_dataloader=train_penguins, test_dataloader=test_penguins, name='Palmer Penguins')
+
+
+
+    # MNIST
 
     # seems to be the well-known way to do things
     # https://stackoverflow.com/questions/63746182/correct-way-of-normalizing-and-scaling-the-mnist-dataset
-
     transform = transforms.Compose(
         [
             transforms.ToImage(),
@@ -156,116 +229,8 @@ if __name__ == "__main__":
     )
     test_loader = DataLoader(test_dataset, batch_size=1024)
 
-    # 28 x 28 pixel images
-    input_dim = 28 * 28
-    hidden_dims = [64]
-    # 10 digits (0- 9)
-    output_dim = 10
+    # input is 28 x 28 pixel images
+    mnist_model_config = MLPConfig(input_dim=28*28, hidden_dims=[64,16], output_dim=10, epochs=5)
 
-    func_names = []
-    train_args_list = []
-    for act_func in [ReLU, Adonis, DeluLU, DeluLUv2]:
-        try:
-            func_name = act_func.name()
-        except AttributeError:
-            func_name = str(act_func().__class__)
-        func_names.append(func_name)
-        model = MLP(
-            input_dim=input_dim,
-            hidden_dims=hidden_dims,
-            output_dim=output_dim,
-            activation_func=act_func,
-        )
-        train_args_list.append((model, train_loader, test_loader, 2))
-
-    with Pool(cpu_count()) as pool:
-        results = pool.starmap(train, train_args_list)
-
-    train_fig = go.Figure()
-    train_fig.update_layout(
-        yaxis_title="Mean Training Loss",
-        xaxis_title="Epoch",
-    )
-    train_fig.update_layout(
-        title_text="Training loss on MNIST for different activation functions"
-    )
-
-    test_fig = go.Figure()
-    test_fig.update_layout(
-        yaxis_title="Accuracy",
-        xaxis_title="Epoch",
-    )
-    test_fig.update_layout(
-        title_text="Test accuracy on MNIST for different activation functions"
-    )
-    test_fig.update
-    for result, func_name in zip(results, func_names):
-        train_losses, test_accys = result
-        train_fig.add_trace(
-            go.Scatter(x=list(range(len(train_losses))), y=train_losses, name=func_name)
-        )
-        test_fig.add_trace(
-            go.Scatter(x=list(range(len(test_accys))), y=test_accys, name=func_name)
-        )
-    train_fig.show()
-    test_fig.show()
-
-    # palmer penguins
-    train_penguins, test_penguins = load_penguins_datasets()
-    train_penguins = DataLoader(train_penguins, batch_size=64, shuffle=True)
-    test_penguins = DataLoader(test_penguins, batch_size=1024)
-
-    # TODO: another experiment would be to search through
-    # different network sizes to see whether one is more efficient
-    input_dim = 7
-    hidden_dims = [64, 16]
-    output_dim = 3
-
-    func_names = []
-    train_args_list = []
-    for act_func in [ReLU, Adonis, DeluLU, DeluLUv2]:
-        try:
-            func_name = act_func.name()
-        except AttributeError:
-            func_name = str(act_func().__class__)
-        func_names.append(func_name)
-        model = MLP(
-            input_dim=input_dim,
-            hidden_dims=hidden_dims,
-            output_dim=output_dim,
-            activation_func=act_func,
-        )
-        train_args_list.append((model, train_penguins, test_penguins, 10))
-
-    with Pool(cpu_count()) as pool:
-        results = pool.starmap(train, train_args_list)
-
-    train_fig = go.Figure()
-    train_fig.update_layout(
-        yaxis_title="Mean Training Loss",
-        xaxis_title="Epoch",
-    )
-    train_fig.update_layout(
-        title_text="Training loss on Palmer Penguins for different activation functions"
-    )
-
-    test_fig = go.Figure()
-    test_fig.update_layout(
-        yaxis_title="Accuracy",
-        xaxis_title="Epoch",
-    )
-    test_fig.update_layout(
-        title_text="Test accuracy on Palmer Penguins for different activation functions"
-    )
-    test_fig.update
-    for result, func_name in zip(results, func_names):
-        train_losses, test_accys = result
-        train_fig.add_trace(
-            go.Scatter(x=list(range(len(train_losses))), y=train_losses, name=func_name)
-        )
-        test_fig.add_trace(
-            go.Scatter(x=list(range(len(test_accys))), y=test_accys, name=func_name)
-        )
-    train_fig.show()
-    test_fig.show()
+    run_experiment(funcs=funcs, mlp_config=mnist_model_config, train_dataloader=train_loader, test_dataloader=test_loader, name='MNIST Handwritten Digits')
 
