@@ -39,6 +39,14 @@ class Adonis(nn.Module):
     def forward(self, x):
         return x.abs()
 
+class Spongebob(nn.Module):
+    @staticmethod
+    def name():
+        return "Spongebob"
+
+    def forward(self, x):
+        return x ** 2
+
 
 class DeluLU(nn.Module):
     @staticmethod
@@ -194,7 +202,7 @@ def run_experiment(funcs: list[nn.Module], mlp_config: MLPConfig, train_dataload
 
 if __name__ == "__main__":
 
-    funcs = [ReLU, Adonis, DeluLU, DeluLUv2]
+    funcs = [ReLU, Adonis, Spongebob, DeluLU, DeluLUv2]
 
     # palmer penguins
     train_penguins, test_penguins = load_penguins_datasets()
