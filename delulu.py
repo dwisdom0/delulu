@@ -20,8 +20,6 @@ class MLPConfig:
     epochs: int
 
 
-
-
 class ReLU(nn.Module):
     @staticmethod
     def name():
@@ -39,13 +37,15 @@ class Adonis(nn.Module):
     def forward(self, x):
         return x.abs()
 
+
 class Spongebob(nn.Module):
     @staticmethod
     def name():
         return "Spongebob"
 
     def forward(self, x):
-        return x ** 2
+        return x**2
+
 
 class Spongebobv2(nn.Module):
     @staticmethod
@@ -157,17 +157,25 @@ def evaluate(model: nn.Module, dataloader: DataLoader):
     return correct / total
 
 
-def run_experiment(funcs: list[nn.Module], mlp_config: MLPConfig, train_dataloader: DataLoader, test_dataloader: DataLoader, name: str):
-    print(f'\nRunning {name}\n')
+def run_experiment(
+    funcs: list[nn.Module],
+    mlp_config: MLPConfig,
+    train_dataloader: DataLoader,
+    test_dataloader: DataLoader,
+    name: str,
+):
+    print(f"\nRunning {name}\n")
     train_args_list = []
     for act_func in funcs:
         model = MLP(
-          input_dim=mlp_config.input_dim,
-          hidden_dims=mlp_config.hidden_dims,
-          output_dim=mlp_config.output_dim,
-          activation_func=act_func
+            input_dim=mlp_config.input_dim,
+            hidden_dims=mlp_config.hidden_dims,
+            output_dim=mlp_config.output_dim,
+            activation_func=act_func,
         )
-        train_args_list.append((model, train_dataloader, test_dataloader, mlp_config.epochs))
+        train_args_list.append(
+            (model, train_dataloader, test_dataloader, mlp_config.epochs)
+        )
 
     with Pool(cpu_count()) as pool:
         results = pool.starmap(train, train_args_list)
@@ -190,7 +198,7 @@ def run_experiment(funcs: list[nn.Module], mlp_config: MLPConfig, train_dataload
         title_text=f"Test accuracy on {name} for different activation functions"
     )
 
-    for result, act_func  in zip(results, funcs):
+    for result, act_func in zip(results, funcs):
         try:
             func_name = act_func.name()
         except AttributeError:
@@ -206,10 +214,7 @@ def run_experiment(funcs: list[nn.Module], mlp_config: MLPConfig, train_dataload
     test_fig.show()
 
 
-
-
 if __name__ == "__main__":
-
     funcs = [ReLU, Adonis, Spongebob, Spongebobv2, DeluLU, DeluLUv2]
 
     # palmer penguins
@@ -217,20 +222,25 @@ if __name__ == "__main__":
     train_penguins = DataLoader(train_penguins, batch_size=64, shuffle=True)
     test_penguins = DataLoader(test_penguins, batch_size=1024)
 
-    penguins_model_config = MLPConfig(input_dim=7, hidden_dims=[64, 16], output_dim=3, epochs=10)
+    penguins_model_config = MLPConfig(
+        input_dim=7, hidden_dims=[64, 16], output_dim=3, epochs=10
+    )
 
-    run_experiment(funcs=funcs, mlp_config=penguins_model_config, train_dataloader=train_penguins, test_dataloader=test_penguins, name='Palmer Penguins')
-
-
+    run_experiment(
+        funcs=funcs,
+        mlp_config=penguins_model_config,
+        train_dataloader=train_penguins,
+        test_dataloader=test_penguins,
+        name="Palmer Penguins",
+    )
 
     # MNIST
-
-    # seems to be the well-known way to do things
-    # https://stackoverflow.com/questions/63746182/correct-way-of-normalizing-and-scaling-the-mnist-dataset
     transform = transforms.Compose(
         [
             transforms.ToImage(),
             transforms.ToDtype(torch.float32, scale=True),
+            # seems to be the well-known way to do things
+            # https://stackoverflow.com/questions/63746182/correct-way-of-normalizing-and-scaling-the-mnist-dataset
             transforms.Normalize((0.1307,), (0.3081,)),  # MNIST mean and std
         ]
     )
@@ -246,7 +256,14 @@ if __name__ == "__main__":
     test_loader = DataLoader(test_dataset, batch_size=1024)
 
     # input is 28 x 28 pixel images
-    mnist_model_config = MLPConfig(input_dim=28*28, hidden_dims=[64,16], output_dim=10, epochs=5)
+    mnist_model_config = MLPConfig(
+        input_dim=28 * 28, hidden_dims=[64, 16], output_dim=10, epochs=5
+    )
 
-    run_experiment(funcs=funcs, mlp_config=mnist_model_config, train_dataloader=train_loader, test_dataloader=test_loader, name='MNIST Handwritten Digits')
-
+    run_experiment(
+        funcs=funcs,
+        mlp_config=mnist_model_config,
+        train_dataloader=train_loader,
+        test_dataloader=test_loader,
+        name="MNIST Handwritten Digits",
+    )
