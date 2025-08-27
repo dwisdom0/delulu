@@ -47,6 +47,14 @@ class Spongebob(nn.Module):
     def forward(self, x):
         return x ** 2
 
+class Spongebobv2(nn.Module):
+    @staticmethod
+    def name():
+        return "Spongebob V2"
+
+    def forward(self, x):
+        return torch.sqrt(x.abs())
+
 
 class DeluLU(nn.Module):
     @staticmethod
@@ -63,7 +71,7 @@ class DeluLU(nn.Module):
 class DeluLUv2(nn.Module):
     @staticmethod
     def name():
-        return "DeluLUv2"
+        return "DeluLU V2"
 
     def forward(self, x):
         # if x >= 0 -> x
@@ -202,7 +210,7 @@ def run_experiment(funcs: list[nn.Module], mlp_config: MLPConfig, train_dataload
 
 if __name__ == "__main__":
 
-    funcs = [ReLU, Adonis, Spongebob, DeluLU, DeluLUv2]
+    funcs = [ReLU, Adonis, Spongebob, Spongebobv2, DeluLU, DeluLUv2]
 
     # palmer penguins
     train_penguins, test_penguins = load_penguins_datasets()
