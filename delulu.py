@@ -170,9 +170,9 @@ def train(
             # https://stackoverflow.com/questions/54716377/how-to-do-gradient-clipping-in-pytorch
             # clip gradients to an L2 norm of 1.0 to prevent NaNs (exploding gradients)
             # still getting some NaNs though
-            # might have to clip individual ones in the backward pass
-            # instead of clipping the sum at the end
-            nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
+            # might have to clip individual values
+            # instead of the norm
+            nn.utils.clip_grad_value_(model.parameters(), 0.1)
             optimizer.step()
 
         mean_train_losses.append(epoch_loss / len(train_dataloader))
