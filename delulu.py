@@ -160,21 +160,28 @@ def train(
             data, labels = data.to(device), labels.to(device)
 
             nan_check(model)
-            outputs = model(data)
+            logits = model(data)
+            if torch.isnan(logits).any():
+                print("NaN in logits")
+            if torch.isinf(logits).any():
+                print("Inf in logits")
             # labels are 1D batch_size but torch CrossEntropyLoss automatically
             # interprets them as class indicies
-            loss = loss_func(outputs, labels)
+            # need to clamp output logits so they don't overflow inside CrossEntropyLoss
+            logits = torch.clamp(logits, min=-50, max=50)
+            loss = loss_func(logits, labels)
             epoch_loss += loss.item()
 
             optimizer.zero_grad()
             loss.backward()
-            # https://stackoverflow.com/questions/54716377/how-to-do-gradient-clipping-in-pytorch
-            # clip gradients to an L2 norm of 1.0 to prevent NaNs (exploding gradients)
-            # still getting some NaNs though
             nan_check(model)
-            nn.utils.clip_grad_value_(model.parameters(), 0.1)
+            # https://stackoverflow.com/questions/54716377/how-to-do-gradient-clipping-in-pytorch
+            # clip gradients to try to prevent NaNs
+            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             nan_check(model)
             optimizer.step()
+            # caught a NaN in this check
+            # which I guess means optimizer.step() is causing NaNs
             nan_check(model)
 
         mean_train_losses.append(epoch_loss / len(train_dataloader))
