@@ -15,9 +15,8 @@ from scipy.stats import bootstrap
 from load_penguins import load_penguins_datasets
 from load_moons import load_moons_datasets
 
-import warnings
-
-warnings.simplefilter("error")
+# import warnings
+# warnings.simplefilter("error")
 
 
 @dataclass
@@ -162,7 +161,7 @@ def train(
             # interprets them as class indicies
             loss = loss_func(outputs, labels)
             if torch.isnan(loss).any():
-                breakpoint()
+                raise ValueError("NaNs detected in loss")
             epoch_loss += loss.item()
 
             optimizer.zero_grad()
@@ -326,7 +325,18 @@ def hex_to_rgba(h: str, alpha: float = 0.2):
 
 
 if __name__ == "__main__":
-    funcs = [ReLU, GELU, SiLU, Adonis, Spongebob, Spongebobv2, DeluLU, DeluLUv2]
+    # I think Spongbobv2 is the problem
+    # I saw something about sqrt(0) causing NaN
+    # but torch.sqrt(torch.tensor([0.0])) just gives me 0.0
+    # https://stackoverflow.com/questions/31919818/theano-sqrt-returning-nan-values?rq=4
+    # couple of issues I can think of
+    # * the derivative of sqrt at 0 is infinite so that's pretty good way to explode the gradient
+    # * I'm calling abs() before sqrt() but maybe there are still negative values getting in there somehow
+    # * probably should just throw out the one based on sqrt() and see whether that fixes things
+
+    # still having problems without the sqrt() one so that' not the issue
+    # funcs = [ReLU, GELU, SiLU, Adonis, Spongebob, Spongebobv2, DeluLU, DeluLUv2]
+    funcs = [ReLU, GELU, SiLU, Adonis, Spongebob, DeluLU, DeluLUv2]
 
     # scikit-learn moons
     # https://scikit-learn.org/stable/modules/generated/sklearn.datasets.make_moons.html
