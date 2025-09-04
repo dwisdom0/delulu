@@ -419,4 +419,5 @@ if __name__ == "__main__":
         train_dataloader=train_loader,
         test_dataloader=test_loader,
         name="MNIST Handwritten Digits",
+        num_trials=20,
     )
