@@ -139,7 +139,7 @@ def train(
     device = torch.device("mps" if torch.mps.is_available() else "cpu")
     model = model.to(device)
     loss_func = nn.CrossEntropyLoss()
-    optimizer = optim.AdamW(model.parameters(), lr=0.001)
+    optimizer = optim.AdamW(model.parameters(), lr=5e-4)
     mean_train_losses = []
     test_accys = []
     for epoch in range(epochs):
@@ -150,7 +150,14 @@ def train(
 
             outputs = model(data)
             if torch.isnan(outputs).any():
-                breakpoint()
+                print(
+                    "NaNs detected in model output. Searching for NaNs in model weights"
+                )
+                for name, param in model.named_parameters():
+                    if torch.isnan(param).any():
+                        print(f"{name}: NaNs detected")
+                        print(param, end="\n\n")
+                raise ValueError("NaNs detected in model output")
             # labels are 1D batch_size but torch CrossEntropyLoss automatically
             # interprets them as class indicies
             loss = loss_func(outputs, labels)
@@ -160,6 +167,12 @@ def train(
 
             optimizer.zero_grad()
             loss.backward()
+            # https://stackoverflow.com/questions/54716377/how-to-do-gradient-clipping-in-pytorch
+            # clip gradients to an L2 norm of 1.0 to prevent NaNs (exploding gradients)
+            # still getting some NaNs though
+            # might have to clip individual ones in the backward pass
+            # instead of clipping the sum at the end
+            nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
             optimizer.step()
 
         mean_train_losses.append(epoch_loss / len(train_dataloader))
@@ -215,7 +228,6 @@ def run_experiment(
         train_losses = []
         test_accys = []
         train_args_list = []
-        results = []
         for trial in tqdm(range(num_trials), ascii=True, leave=False):
             model = MLP(
                 input_dim=mlp_config.input_dim,
@@ -223,14 +235,11 @@ def run_experiment(
                 output_dim=mlp_config.output_dim,
                 activation_func=act_func,
             )
-            results.append(
-                train(model, train_dataloader, test_dataloader, mlp_config.epochs)
+            train_args_list.append(
+                (model, train_dataloader, test_dataloader, mlp_config.epochs)
             )
-        #    train_args_list.append(
-        #        (model, train_dataloader, test_dataloader, mlp_config.epochs)
-        #    )
-        # with Pool(cpu_count()) as pool:
-        #    results = pool.starmap(train, train_args_list)
+        with Pool(cpu_count()) as pool:
+            results = pool.starmap(train, train_args_list)
 
         for result in results:
             train_losses.append(result[0])
@@ -299,17 +308,13 @@ def many_runs_to_mean_plus_ci(data: np.array):
     expects an array with shape (num_runs, run)
     """
     if np.isnan(data).any():
-        breakpoint()
+        raise ValueError("NaNs detected in the loss or accuracy data.")
     mean = np.mean(data, axis=0)
-    try:
-        bca_ci = bootstrap(
-            (data,), statistic=np.mean, vectorized=True, axis=0, method="BCa"
-        )
-    except:
-        breakpoint()
+    bca_ci = bootstrap(
+        (data,), statistic=np.mean, vectorized=True, axis=0, method="BCa"
+    )
     hi = bca_ci.confidence_interval.high
     lo = bca_ci.confidence_interval.low
-    # breakpoint()
     return mean, hi, lo
 
 
@@ -325,6 +330,7 @@ if __name__ == "__main__":
 
     # scikit-learn moons
     # https://scikit-learn.org/stable/modules/generated/sklearn.datasets.make_moons.html
+    # TODO: scale the input data and see how that impacts results
     train_moons, test_moons = load_moons_datasets()
     train_moons = DataLoader(train_moons, batch_size=64, shuffle=True)
     test_moons = DataLoader(test_moons, batch_size=1024)
@@ -342,6 +348,7 @@ if __name__ == "__main__":
     )
 
     # palmer penguins
+    # TODO: scale the input data and see how that impacts results
     train_penguins, test_penguins = load_penguins_datasets()
     train_penguins = DataLoader(train_penguins, batch_size=64, shuffle=True)
     test_penguins = DataLoader(test_penguins, batch_size=1024)
