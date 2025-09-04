@@ -150,7 +150,7 @@ def train(
     device = torch.device("mps" if torch.mps.is_available() else "cpu")
     model = model.to(device)
     loss_func = nn.CrossEntropyLoss()
-    optimizer = optim.AdamW(model.parameters(), lr=5e-4)
+    optimizer = optim.AdamW(model.parameters(), lr=5e-4, weight_decay=1e-4)
     mean_train_losses = []
     test_accys = []
     for epoch in range(epochs):
@@ -358,6 +358,7 @@ if __name__ == "__main__":
         train_dataloader=train_moons,
         test_dataloader=test_moons,
         name="SKLearn Moons",
+        num_trials=20,
     )
 
     # palmer penguins
@@ -376,6 +377,7 @@ if __name__ == "__main__":
         train_dataloader=train_penguins,
         test_dataloader=test_penguins,
         name="Palmer Penguins",
+        num_trials=20,
     )
 
     # MNIST
