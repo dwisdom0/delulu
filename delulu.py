@@ -129,6 +129,18 @@ class MLP(nn.Module):
         return self.mlp(x)
 
 
+def nan_check(model: nn.Module):
+    nans_detected = False
+    for name, param in model.named_parameters():
+        if torch.isnan(param).any():
+            nans_detected = True
+            print(f"{name}: NaNs detected")
+            print(param, end="\n\n")
+    if nans_detected:
+        print(model)
+        raise ValueError("NaNs detected")
+
+
 def train(
     model: nn.Module,
     train_dataloader: DataLoader,
@@ -147,21 +159,11 @@ def train(
         for data, labels in train_dataloader:
             data, labels = data.to(device), labels.to(device)
 
+            nan_check(model)
             outputs = model(data)
-            if torch.isnan(outputs).any():
-                print(
-                    "NaNs detected in model output. Searching for NaNs in model weights"
-                )
-                for name, param in model.named_parameters():
-                    if torch.isnan(param).any():
-                        print(f"{name}: NaNs detected")
-                        print(param, end="\n\n")
-                raise ValueError("NaNs detected in model output")
             # labels are 1D batch_size but torch CrossEntropyLoss automatically
             # interprets them as class indicies
             loss = loss_func(outputs, labels)
-            if torch.isnan(loss).any():
-                raise ValueError("NaNs detected in loss")
             epoch_loss += loss.item()
 
             optimizer.zero_grad()
@@ -169,10 +171,11 @@ def train(
             # https://stackoverflow.com/questions/54716377/how-to-do-gradient-clipping-in-pytorch
             # clip gradients to an L2 norm of 1.0 to prevent NaNs (exploding gradients)
             # still getting some NaNs though
-            # might have to clip individual values
-            # instead of the norm
+            nan_check(model)
             nn.utils.clip_grad_value_(model.parameters(), 0.1)
+            nan_check(model)
             optimizer.step()
+            nan_check(model)
 
         mean_train_losses.append(epoch_loss / len(train_dataloader))
         test_accys.append(evaluate(model, test_dataloader))
