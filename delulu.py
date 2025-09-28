@@ -132,6 +132,10 @@ class DeluLUv2(nn.Module):
             raise ValueError(
                 f"inf detected in {self.name()}\nInput:\n{x}\nOutput:\n{to_return}"
             )
+        if torch.where(to_return > 1e6, True, False).any():
+            raise ValueError(
+                f"large value detected in {self.name()}\nInput:\n{x}\nOutput:\n{to_return}"
+            )
         return to_return
 
 
@@ -152,6 +156,10 @@ class DeluLUv3(nn.Module):
         if torch.isinf(to_return).any():
             raise ValueError(
                 f"inf detected in {self.name()}\nInput:\n{x}\nOutput:\n{to_return}"
+            )
+        if torch.where(to_return > 1e6, True, False).any():
+            raise ValueError(
+                f"large value detected in {self.name()}\nInput:\n{x}\nOutput:\n{to_return}"
             )
         return to_return
 
@@ -180,7 +188,7 @@ class MLP(nn.Module):
         return self.mlp(x)
 
 
-def nan_check(model: nn.Module):
+def nan_check(model: nn.Module, optimizer):
     nans_detected = False
     for name, param in model.named_parameters():
         if torch.isnan(param).any():
@@ -188,6 +196,8 @@ def nan_check(model: nn.Module):
             print(f"{name}: NaNs detected")
             print(param, end="\n\n")
     if nans_detected:
+        print("Optimizer state")
+        print(optimizer.param_groups)
         print(model)
         raise ValueError("NaNs detected")
 
@@ -210,7 +220,7 @@ def train(
         for data, labels in train_dataloader:
             data, labels = data.to(device), labels.to(device)
 
-            nan_check(model)
+            nan_check(model, optimizer)
             logits = model(data)
             if torch.isnan(logits).any():
                 print("NaN in logits")
@@ -225,15 +235,15 @@ def train(
 
             optimizer.zero_grad()
             loss.backward()
-            nan_check(model)
+            nan_check(model, optimizer)
             # https://stackoverflow.com/questions/54716377/how-to-do-gradient-clipping-in-pytorch
             # clip gradients to try to prevent NaNs
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            nan_check(model)
+            nan_check(model, optimizer)
             optimizer.step()
             # caught a NaN in this check
             # which I guess means optimizer.step() is causing NaNs
-            nan_check(model)
+            nan_check(model, optimizer)
 
         mean_train_losses.append(epoch_loss / len(train_dataloader))
         test_accys.append(evaluate(model, test_dataloader))
@@ -405,7 +415,22 @@ def plot_funcs(funcs: list[nn.Module]):
     fig.show()
 
 
+def test_stability():
+    vals = [-1e-2, -1e-3, -1e-4, -1e-5, -1e-10, -1e-20]
+    x = torch.tensor(vals, requires_grad=True)
+    v1 = DeluLU().forward(x).sum().backward()
+    print(f"v1: {x.grad}")
+    x = torch.tensor(vals, requires_grad=True)
+    v2 = DeluLUv2().forward(x).sum().backward()
+    print(f"v2: {x.grad}")
+    x = torch.tensor(vals, requires_grad=True)
+    v3 = DeluLUv3().forward(x).sum().backward()
+    print(f"v3: {x.grad}")
+
+
 if __name__ == "__main__":
+    test_stability()
+
     # I think Spongbobv2 is the problem
     # I saw something about sqrt(0) causing NaN
     # but torch.sqrt(torch.tensor([0.0])) just gives me 0.0
