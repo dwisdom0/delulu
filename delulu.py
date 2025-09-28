@@ -1,3 +1,5 @@
+import sys
+import math
 import torch
 import numpy as np
 import torch.nn as nn
@@ -11,6 +13,7 @@ from dataclasses import dataclass
 from multiprocessing import Pool, cpu_count
 from tqdm import tqdm
 from scipy.stats import bootstrap
+from plotly.subplots import make_subplots
 
 from load_penguins import load_penguins_datasets
 from load_moons import load_moons_datasets
@@ -332,6 +335,24 @@ def hex_to_rgba(h: str, alpha: float = 0.2):
     g = int(h[3:5], base=16)
     b = int(h[5:7], base=16)
     return f"rgba({r}, {g}, {b}, {alpha})"
+
+
+def plot_funcs(funcs: list[nn.Module]):
+    num_cols = 4
+    fig = make_subplots(rows=math.ceil(len(funcs) / num_cols), cols=num_cols, subplot_titles=[func.name() for func in funcs] )
+    step = 0.1
+    xs = torch.arange(-3, 3 + step, step)
+
+    for i, func in enumerate(funcs):
+        row = math.ceil((i + 1e-2) / num_cols)
+        col = i % num_cols + 1
+        #print(f'{i=}, {row=}, {col=}')
+        fig.add_trace(
+            go.Scatter(x=xs, y=func().forward(xs)), row=row, col=col
+        )
+
+    fig.update_layout(showlegend=False)
+    fig.show()
 
 
 if __name__ == "__main__":
