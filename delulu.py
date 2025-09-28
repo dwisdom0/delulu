@@ -57,10 +57,28 @@ class SiLU(nn.Module):
         return nn.functional.silu(x)
 
 
+class SELU(nn.Module):
+    @staticmethod
+    def name():
+        return "SELU"
+
+    def forward(self, x):
+        return torch.nn.functional.selu(x)
+
+
+class CELU(nn.Module):
+    @staticmethod
+    def name():
+        return "CELU"
+
+    def forward(self, x):
+        return torch.nn.functional.celu(x)
+
+
 class Adonis(nn.Module):
     @staticmethod
     def name():
-        return "Adonis"
+        return "abs()"
 
     def forward(self, x):
         return x.abs()
@@ -69,7 +87,7 @@ class Adonis(nn.Module):
 class Spongebob(nn.Module):
     @staticmethod
     def name():
-        return "Spongebob"
+        return "square()"
 
     def forward(self, x):
         return x**2
@@ -78,7 +96,7 @@ class Spongebob(nn.Module):
 class Spongebobv2(nn.Module):
     @staticmethod
     def name():
-        return "Spongebob V2"
+        return "sqrt(abs())"
 
     def forward(self, x):
         return torch.sqrt(x.abs())
@@ -105,7 +123,37 @@ class DeluLUv2(nn.Module):
         # if x >= 0 -> x
         # if x < 0  -> (alpha / (alpha - x)) - 1
         alpha = 0.2
-        return torch.where(x >= 0, x, (alpha / (alpha - x)) - 1)
+        to_return = torch.where(x >= 0, x, (alpha / (alpha - x)) - 1)
+        if torch.isnan(to_return).any():
+            raise ValueError(
+                f"NaN detected in {self.name()}\nInput:\n{x}\nOutput:\n{to_return}"
+            )
+        if torch.isinf(to_return).any():
+            raise ValueError(
+                f"inf detected in {self.name()}\nInput:\n{x}\nOutput:\n{to_return}"
+            )
+        return to_return
+
+
+class DeluLUv3(nn.Module):
+    @staticmethod
+    def name():
+        return "DeluLU V3"
+
+    def forward(self, x):
+        # if x >= 0 -> x
+        # if x < 0  -> (1 / (1 - x)) - 1
+        alpha = 1
+        to_return = torch.where(x >= 0, x, (alpha / (alpha - x)) - 1)
+        if torch.isnan(to_return).any():
+            raise ValueError(
+                f"NaN detected in {self.name()}\nInput:\n{x}\nOutput:\n{to_return}"
+            )
+        if torch.isinf(to_return).any():
+            raise ValueError(
+                f"inf detected in {self.name()}\nInput:\n{x}\nOutput:\n{to_return}"
+            )
+        return to_return
 
 
 class MLP(nn.Module):
@@ -339,17 +387,19 @@ def hex_to_rgba(h: str, alpha: float = 0.2):
 
 def plot_funcs(funcs: list[nn.Module]):
     num_cols = 4
-    fig = make_subplots(rows=math.ceil(len(funcs) / num_cols), cols=num_cols, subplot_titles=[func.name() for func in funcs] )
+    fig = make_subplots(
+        rows=math.ceil(len(funcs) / num_cols),
+        cols=num_cols,
+        subplot_titles=[func.name() for func in funcs],
+    )
     step = 0.1
     xs = torch.arange(-3, 3 + step, step)
 
     for i, func in enumerate(funcs):
         row = math.ceil((i + 1e-2) / num_cols)
         col = i % num_cols + 1
-        #print(f'{i=}, {row=}, {col=}')
-        fig.add_trace(
-            go.Scatter(x=xs, y=func().forward(xs)), row=row, col=col
-        )
+        # print(f'{i=}, {row=}, {col=}')
+        fig.add_trace(go.Scatter(x=xs, y=func().forward(xs)), row=row, col=col)
 
     fig.update_layout(showlegend=False)
     fig.show()
@@ -365,9 +415,16 @@ if __name__ == "__main__":
     # * I'm calling abs() before sqrt() but maybe there are still negative values getting in there somehow
     # * probably should just throw out the one based on sqrt() and see whether that fixes things
 
-    # still having problems without the sqrt() one so that' not the issue
-    # funcs = [ReLU, GELU, SiLU, Adonis, Spongebob, Spongebobv2, DeluLU, DeluLUv2]
-    funcs = [ReLU, GELU, SiLU, Adonis, Spongebob, DeluLU, DeluLUv2]
+    # still having problems without the sqrt() one so that's not the issue
+    # funcs = [ReLU, GELU, SiLU, Adonis, Spongebob, DeluLU, DeluLUv2]
+
+    # v2 and v3 keep creating NaNs
+    # funcs = [ReLU, GELU, SiLU, SELU, CELU, Adonis, Spongebob, Spongebobv2, DeluLU, DeluLUv2, DeluLUv3]
+    # funcs = [ReLU, GELU, SiLU, SELU, CELU, Adonis, Spongebob, Spongebobv2, DeluLU, DeluLUv3]
+
+    funcs = [DeluLUv2, DeluLUv3]
+
+    plot_funcs(funcs)
 
     # scikit-learn moons
     # https://scikit-learn.org/stable/modules/generated/sklearn.datasets.make_moons.html
